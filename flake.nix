@@ -11,100 +11,73 @@
     safe-coloured-text.flake = false;
     sydtest.url = "github:NorfairKing/sydtest";
     sydtest.flake = false;
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs =
-    { self
-    , nixpkgs
-    , pre-commit-hooks
-    , validity
-    , safe-coloured-text
-    , sydtest
-    , autodocodec
-    }:
+  outputs = { self, nixpkgs, pre-commit-hooks, validity, safe-coloured-text
+    , sydtest, autodocodec, flake-utils }:
     let
-      system = "x86_64-linux";
-      pkgsFor = nixpkgs: import nixpkgs {
-        inherit system;
-        overlays = [
-          self.overlays.${system}
-          (import (autodocodec + "/nix/overlay.nix"))
-          (import (safe-coloured-text + "/nix/overlay.nix"))
-          (import (sydtest + "/nix/overlay.nix"))
-          (import (validity + "/nix/overlay.nix"))
-        ];
-      };
-      pkgs = pkgsFor nixpkgs;
+      systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
+      pkgsFor = system: nixpkgs:
+        import nixpkgs {
+          inherit system;
+          overlays = [
+            self.overlays.${system}
+            (import (autodocodec + "/nix/overlay.nix"))
+            (import (safe-coloured-text + "/nix/overlay.nix"))
+            (import (sydtest + "/nix/overlay.nix"))
+            (import (validity + "/nix/overlay.nix"))
+          ];
+        };
+      sysPkgs = sys: pkgsFor sys nixpkgs;
 
-    in
-    {
-      overlays.${system} = import ./nix/overlay.nix;
-      packages.${system}.default = pkgs.openapi3-code-generator;
-      checks.${system} =
-        let tests = import ./nix/tests.nix { inherit pkgs; };
-        in
-        {
+    in flake-utils.lib.eachSystem systems (system:
+      let pkgs = sysPkgs system;
+      in {
+        overlays = import ./nix/overlay.nix;
+        packages.default = pkgs.openapi3-code-generator;
+        checks = let tests = import ./nix/tests.nix { inherit pkgs; };
+        in {
           inherit (tests)
-            testSystem1
-            testSystem2
-            testSystem3
-            testGolden
-            testGoldenGenerate;
+            testSystem1 testSystem2 testSystem3 testGolden testGoldenGenerate;
           pre-commit = pre-commit-hooks.lib.${system}.run {
             src = ./.;
             hooks = {
               nixpkgs-fmt = {
                 enable = true;
-                excludes = [
-                  "example"
-                  "testing/golden-output"
-                  ".*/default.nix"
-                ];
+                excludes =
+                  [ "example" "testing/golden-output" ".*/default.nix" ];
               };
               hlint = {
                 enable = true;
-                excludes = [
-                  "example"
-                  "testing/golden-output"
-                ];
+                excludes = [ "example" "testing/golden-output" ];
               };
               ormolu = {
                 enable = true;
-                excludes = [
-                  "example"
-                  "testing/golden-output"
-                ];
+                excludes = [ "example" "testing/golden-output" ];
               };
 
               cabal2nix = {
                 enable = true;
-                excludes = [
-                  "example"
-                  "testing/golden-output"
-                ];
+                excludes = [ "example" "testing/golden-output" ];
               };
             };
           };
         };
-      devShells.${system}.default = pkgs.haskellPackages.shellFor {
-        name = "openapi-code-generator-shell";
-        packages = (p:
-          [ p.openapi3-code-generator ]
-        );
-        withHoogle = true;
-        doBenchmark = true;
-        buildInputs = (with pkgs; [
-          zlib
-          cabal-install
-        ]) ++ (with pre-commit-hooks.packages.${system};
-          [
-            hlint
-            hpack
-            nixpkgs-fmt
-            ormolu
-            cabal2nix
-          ]);
-        shellHook = self.checks.${system}.pre-commit.shellHook;
-      };
-    };
+        devShells.default = pkgs.haskellPackages.shellFor {
+          name = "openapi-code-generator-shell";
+          packages = (p: [ p.openapi3-code-generator ]);
+          withHoogle = true;
+          doBenchmark = true;
+          buildInputs = (with pkgs; [ zlib cabal-install ])
+            ++ (with pre-commit-hooks.packages.${system}; [
+              hlint
+              hpack
+              nixpkgs-fmt
+              ormolu
+              cabal2nix
+            ]);
+          shellHook = self.checks.${system}.pre-commit.shellHook;
+        };
+      });
 }
