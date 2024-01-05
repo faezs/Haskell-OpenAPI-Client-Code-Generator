@@ -14,8 +14,16 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, pre-commit-hooks, validity, safe-coloured-text
-    , sydtest, autodocodec, flake-utils }:
+  outputs =
+    { self
+    , nixpkgs
+    , pre-commit-hooks
+    , validity
+    , safe-coloured-text
+    , sydtest
+    , autodocodec
+    , flake-utils
+    }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
       pkgsFor = system: nixpkgs:
@@ -31,12 +39,14 @@
         };
       sysPkgs = sys: pkgsFor sys nixpkgs;
 
-    in flake-utils.lib.eachSystem systems (system:
-      let pkgs = sysPkgs system;
-      in {
-        overlays = import ./nix/overlay.nix;
-        packages.default = pkgs.openapi3-code-generator;
-        checks = let tests = import ./nix/tests.nix { inherit pkgs; };
+    in
+    flake-utils.lib.eachSystem systems (system:
+    let pkgs = sysPkgs system;
+    in {
+      overlays = import ./nix/overlay.nix;
+      packages.default = pkgs.openapi3-code-generator;
+      checks =
+        let tests = import ./nix/tests.nix { inherit pkgs; };
         in {
           inherit (tests)
             testSystem1 testSystem2 testSystem3 testGolden testGoldenGenerate;
@@ -64,20 +74,20 @@
             };
           };
         };
-        devShells.default = pkgs.haskellPackages.shellFor {
-          name = "openapi-code-generator-shell";
-          packages = (p: [ p.openapi3-code-generator ]);
-          withHoogle = true;
-          doBenchmark = true;
-          buildInputs = (with pkgs; [ zlib cabal-install ])
-            ++ (with pre-commit-hooks.packages.${system}; [
-              hlint
-              hpack
-              nixpkgs-fmt
-              ormolu
-              cabal2nix
-            ]);
-          shellHook = self.checks.${system}.pre-commit.shellHook;
-        };
-      });
+      devShells.default = pkgs.haskellPackages.shellFor {
+        name = "openapi-code-generator-shell";
+        packages = (p: [ p.openapi3-code-generator ]);
+        withHoogle = true;
+        doBenchmark = true;
+        buildInputs = (with pkgs; [ zlib cabal-install ])
+          ++ (with pre-commit-hooks.packages.${system}; [
+          hlint
+          hpack
+          nixpkgs-fmt
+          ormolu
+          cabal2nix
+        ]);
+        shellHook = self.checks.${system}.pre-commit.shellHook;
+      };
+    });
 }
